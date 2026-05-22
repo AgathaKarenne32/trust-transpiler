@@ -1,7 +1,9 @@
 #lang racket/base
 
+(require racket/match) ;
+(require racket/hash) ;
 ;;; =============================================================================
-;;; trust-transpiler/src/taint-engine.rkt
+;;; trust-transpiler/src/taint_engine.rkt
 ;;; Motor de Taint Analysis — Puro e Agnóstico à Linguagem de Origem
 ;;;
 ;;; Arquitetura:

@@ -16,7 +16,7 @@
 (require rackunit
          rackunit/text-ui
          "../src/uir.rkt"
-         "../src/taint-engine.rkt")
+         "../src/taint_engine.rkt")
 
 ;; Localização fictícia para os testes
 (define test-loc (src-location "<test>" 1 0))

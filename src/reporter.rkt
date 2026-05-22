@@ -1,5 +1,7 @@
 #lang racket/base
 
+(provide report-analysis) ;
+
 ;;; =============================================================================
 ;;; trust-transpiler/src/reporter.rkt
 ;;; Interface de Relatório — Resultados de Análise → Log Legível
@@ -16,7 +18,7 @@
 (require racket/list
          racket/string
          "uir.rkt"
-         "taint-engine.rkt")
+         "taint_engine.rkt")
 
 (provide
   report-analysis

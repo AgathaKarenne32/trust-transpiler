@@ -54,6 +54,7 @@
 ;; -----------------------------------------------------------------------------
 (module+ main
   (define demo-mode (make-parameter #f))
+  (define color-mode (make-parameter #f))
 
   (command-line
     #:program "trust-transpiler"
@@ -63,7 +64,7 @@
      (demo-mode #t)]
     ["--no-color"
      "Desabilita saída colorida (útil para CI/CD)"
-     (set! *use-color-output* #f)]
+     (color-mode #f)] 
     #:args args
 
     (cond
