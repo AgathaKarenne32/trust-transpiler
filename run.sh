@@ -42,7 +42,13 @@ case "${1:-help}" in
   test)
     check_racket
     echo "→ Executando suíte de testes unitários..."
-    racket tests/taint-tests.rkt
+    # Caminho corrigido para test/taint_test.rkt
+    if [ -f "test/taint_test.rkt" ]; then
+        racket test/taint_test.rkt
+    else
+        echo "❌ Erro: Arquivo test/taint_test.rkt não encontrado!"
+        exit 1
+    fi
     ;;
 
   help|--help|-h)

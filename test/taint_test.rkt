@@ -5,10 +5,8 @@
          "../src/uir.rkt"
          "../src/taint_engine.rkt")
 
-;; Localização para testes
 (define test-loc (src-location "<test>" 1 0))
 
-;; Definição dos testes
 (define test-taint-propagation
   (test-case "Teste A: Propagação"
     (let* ([stmt1 (uir:assign 'user_input "source()" taint:tainted test-loc)]
@@ -37,7 +35,7 @@
            [result (analyze-program prog)])
       (check-equal? (length (analysis-result-violations result)) 1))))
 
-;; Execução da suíte
+;; O segredo: chamar explicitamente o runner aqui fora de qualquer módulo
 (run-tests 
   (test-suite "Trust-Transpiler Taint Analysis Tests"
     test-taint-propagation
