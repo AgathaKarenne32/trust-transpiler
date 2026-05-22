@@ -15,7 +15,7 @@
          racket/string
          "src/uir.rkt"
          "src/parser.rkt"
-         "src/taint-engine.rkt"
+         "src/taint_engine.rkt"
          "src/reporter.rkt")
 
 ;; -----------------------------------------------------------------------------
