@@ -1,0 +1,3 @@
+let raw_data = source;
+let tainted_val = raw_data;
+query(tainted_val);

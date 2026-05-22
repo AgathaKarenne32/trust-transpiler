@@ -1,0 +1,4 @@
+let raw_data = source;
+let safe_val = raw_data;
+sanitize(safe_val);
+query(safe_val);

@@ -17,14 +17,9 @@
   '(log query exec eval send write display println))
 
 ;; Conjunto de funções/expressões consideradas SOURCES de taint
-
-;;CORREÇÃO PARA FUNCIONAR SEM VULNERABILIDADE
 (define *source-expressions*
-  '("source()" "user-input()" "read-line" "getenv"))
+  '("source" "source()" "user-input()" "read-line" "getenv"))
 
-;; OCORRER A VULNERABILIDADE
-;;(define *source-expressions*
-;;  '("source" "source()" "user-input()" "read-line" "getenv"))
 ;; -----------------------------------------------------------------------------
 ;; Tokenizer
 ;; -----------------------------------------------------------------------------
@@ -80,14 +75,18 @@
 (define (parse-string content)
   (parse-program content "<string>"))
 
+;; Função única de parse-stmts com o Debug incluído
 (define (parse-stmts ctx)
   (let loop ([stmts '()])
-    (if (not (ctx-peek ctx))
-        (reverse stmts)
-        (let ([stmt (parse-stmt ctx)])
-          (if stmt
-              (loop (cons stmt stmts))
-              (reverse stmts))))))
+    (let ([tok (ctx-peek ctx)])
+      ;; Debug para ver o que o parser está lendo
+      (displayln (format "DEBUG: Token atual = ~a" tok))
+      (if (not tok)
+          (reverse stmts)
+          (let ([stmt (parse-stmt ctx)])
+            (if stmt
+                (loop (cons stmt stmts))
+                (reverse stmts)))))))
 
 (define (parse-stmt ctx)
   (match (ctx-peek ctx)
@@ -109,12 +108,12 @@
      (ctx-consume! ctx)
      (ctx-expect! ctx "(")
      (let* ([cond-var (string->symbol (ctx-consume! ctx))]
-            [_        (ctx-expect! ctx ")")]
-            [loc      (make-loc ctx)]
-            [then-b   (parse-stmt ctx)]
-            [else-b   (if (equal? (ctx-peek ctx) "else")
-                          (begin (ctx-consume! ctx) (parse-stmt ctx))
-                          (uir:noop loc))])
+            [_         (ctx-expect! ctx ")")]
+            [loc       (make-loc ctx)]
+            [then-b    (parse-stmt ctx)]
+            [else-b    (if (equal? (ctx-peek ctx) "else")
+                           (begin (ctx-consume! ctx) (parse-stmt ctx))
+                           (uir:noop loc))])
        (uir:branch cond-var then-b else-b loc))]
 
     ;; Chamada de função: funcname(arg?);
