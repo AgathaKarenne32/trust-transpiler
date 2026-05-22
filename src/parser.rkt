@@ -1,5 +1,7 @@
 #lang racket/base
 
+(require racket/match) ; 
+
 ;;; =============================================================================
 ;;; trust-transpiler/src/parser.rkt
 ;;; Parser Minimalista — Texto → UIR
