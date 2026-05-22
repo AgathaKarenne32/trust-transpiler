@@ -17,10 +17,14 @@
   '(log query exec eval send write display println))
 
 ;; Conjunto de funções/expressões consideradas SOURCES de taint
-;;(define *source-expressions*
-;;  '("source()" "user-input()" "read-line" "getenv"))
+
+;;CORREÇÃO PARA FUNCIONAR SEM VULNERABILIDADE
 (define *source-expressions*
-  '("source" "source()" "user-input()" "read-line" "getenv"))
+  '("source()" "user-input()" "read-line" "getenv"))
+
+;; OCORRER A VULNERABILIDADE
+;;(define *source-expressions*
+;;  '("source" "source()" "user-input()" "read-line" "getenv"))
 ;; -----------------------------------------------------------------------------
 ;; Tokenizer
 ;; -----------------------------------------------------------------------------

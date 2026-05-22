@@ -16,6 +16,8 @@
 ;; -----------------------------------------------------------------------------
 ;; Programa de demonstração embutido
 ;; -----------------------------------------------------------------------------
+
+;;SEM VULNERABILIDADE
 (define *demo-program*
   "let raw_input = source; 
    let safe_val = raw_input; 
@@ -24,7 +26,7 @@
    log(user_query); 
    query(safe_val);")
 
-;; Demostração de erro de vulnerabilidade
+;; COM ERRO DE VULNERABILIDADE 
 ;;(define *demo-program*
 ;;  "let raw_input = source; 
 ;;   let bad_val = raw_input; 
