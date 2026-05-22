@@ -1,0 +1,17 @@
+name: Trust-Transpiler CI
+
+on: [push, pull_request]
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Instalar Racket
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y racket
+      - name: Rodar Analise de Demo
+        run: racket main.rkt --demo
+      - name: Rodar Testes Unitários
+        run: racket test/taint_test.rkt
