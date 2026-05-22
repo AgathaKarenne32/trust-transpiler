@@ -16,19 +16,19 @@
 ;; -----------------------------------------------------------------------------
 ;; Programa de demonstração embutido
 ;; -----------------------------------------------------------------------------
-;;(define *demo-program*
-;;  "let raw_input = source; 
-;;   let safe_val = raw_input; 
-;;   sanitize(safe_val); 
-;;   let user_query = source; 
-;;   log(user_query); 
-;;   query(safe_val);")
-
-;; Demostração de erro de vulnerabilidade
 (define *demo-program*
   "let raw_input = source; 
-   let bad_val = raw_input; 
-   query(bad_val);") ;; Aqui não há sanitize, logo deveria acusar falha!
+   let safe_val = raw_input; 
+   sanitize(safe_val); 
+   let user_query = source; 
+   log(user_query); 
+   query(safe_val);")
+
+;; Demostração de erro de vulnerabilidade
+;;(define *demo-program*
+;;  "let raw_input = source; 
+;;   let bad_val = raw_input; 
+;;   query(bad_val);") ;; Aqui não há sanitize, logo deveria acusar falha!
 
 ;; -----------------------------------------------------------------------------
 ;; Pipeline principal: arquivo → UIR → análise → relatório
