@@ -79,8 +79,6 @@
 (define (parse-stmts ctx)
   (let loop ([stmts '()])
     (let ([tok (ctx-peek ctx)])
-      ;; Debug para ver o que o parser está lendo
-      (displayln (format "DEBUG: Token atual = ~a" tok))
       (if (not tok)
           (reverse stmts)
           (let ([stmt (parse-stmt ctx)])
