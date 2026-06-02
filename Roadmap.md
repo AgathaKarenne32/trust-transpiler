@@ -529,5 +529,3 @@ Dep. stubs ──► FP scorer ──► Autofix engine ──► AI detector
 - Racket — [Pattern Matching](https://docs.racket-lang.org/reference/match.html)
 
 ---
-
-*Trust-Transpiler v3 Roadmap — gerado em 2026*
