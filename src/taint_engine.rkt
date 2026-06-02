@@ -1,7 +1,9 @@
 #lang racket/base
 
 (require racket/match) ;
+(require net/url) ; 
 (require racket/hash) ;
+(require racket/string) ;
 ;;; =============================================================================
 ;;; trust-transpiler/src/taint_engine.rkt
 ;;; Motor de Taint Analysis — Puro e Agnóstico à Linguagem de Origem
@@ -20,6 +22,7 @@
 ;;; =============================================================================
 
 (require racket/list
+        "stub-registry.rkt"
          "uir.rkt")
 
 (provide
@@ -64,6 +67,18 @@
 (define (sanitizer? func-sym)
   (member func-sym *sanitizer-functions*))
 
+(define *sink-functions* '(query log)) ;;
+;; Exemplo de lógica de verificação de Sink
+(define (is-sink? func-sym module-name)
+  (let ([stub-policy (stub-policy-for module-name)])
+    (if stub-policy
+        ;; Busca a lista de sinks na lista de associação
+        (let ([sinks-entry (assq 'sinks stub-policy)])
+          (if sinks-entry
+              (member func-sym (cdr sinks-entry)) ; Verifica se func-sym está na lista
+              #f))
+        ;; Fallback para a lista global hardcoded
+        (member func-sym *sink-functions*))))
 (define (register-sanitizer! func-sym)
   (set! *sanitizer-functions* (cons func-sym *sanitizer-functions*)))
 
@@ -143,22 +158,22 @@
     ;;   - O "retorno" implícito limpa o taint do primeiro argumento
     ;; -----------------------------------------------------------------
     [(uir:call func args sink? loc)
-     (let* ([arg-taints  (map (λ (a) (env-lookup env a)) args)]
+     (let* ([arg-taints (map (λ (a) (env-lookup env a)) args)]
             [any-tainted (ormap (λ (t) (eq? t taint:tainted)) arg-taints)]
-            [is-sanitizer (sanitizer? func)])
+            [is-sanitizer (sanitizer? func)]
+            ;; PASSAGEM DO MÓDULO: Aqui assumimos que func pode vir como 'modulo.funcao'
+            ;; ou simplesmente passamos 'global para buscar no padrão
+            [module-name (extract-module-name func)])
+          (displayln (format "DEBUG: func=~a, mod=~a" func module-name))
+
        (cond
-         ;; Caso 1: É um sink com argumento tainted → VIOLAÇÃO
-         [(and sink? any-tainted)
-          (let ([v (violation
-                     'unsanitized-sink
-                     (if (null? args) 'unknown (car args))
-                     func
-                     (cons func taint-path)
-                     loc)])
+         ;; Caso 1: Verifica usando a nova is-sink? que consulta o stub
+         [(and (is-sink? func module-name) any-tainted) 
+          (let ([v (violation 'unsanitized-sink (if (null? args) 'unknown (car args)) func (cons func taint-path) loc)])
             (analysis-result (list v) env))]
 
          ;; Caso 2: É um sanitizador → marca primeiro arg como sanitized
-         [is-sanitizer
+         [is-sanitizer 
           (let* ([new-env (if (not (null? args))
                               (env-set env (car args) taint:sanitized)
                               env)])
@@ -232,3 +247,9 @@
 ;; para cada variável, usa o taint mais alto (join).
 (define (env-join env1 env2)
   (hash-union env1 env2 #:combine taint-join))
+
+(define (extract-module-name func-sym)
+  (let ([str (symbol->string func-sym)])
+      (if (string-contains? str ".")
+        (string->symbol (car (string-split str ".")))
+        'global))) ;; Se não tem ponto, busca no default

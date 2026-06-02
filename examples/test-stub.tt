@@ -1,0 +1,4 @@
+let input = source;
+let tainted = input;
+lib-exemplo.processar(tainted);
+lib-exemplo.processar(tainted_val);
