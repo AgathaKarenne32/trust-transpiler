@@ -1,9 +1,8 @@
 #lang racket/base
 
-;;; =============================================================================
+
 ;;; trust-transpiler/main.rkt
 ;;; Ponto de Entrada CLI — Trust-Transpiler Scanner
-;;; =============================================================================
 
 (require racket/cmdline
          racket/file
@@ -11,11 +10,11 @@
          "src/uir.rkt"
          "src/parser.rkt"
          "src/taint_engine.rkt"
-         "src/reporter.rkt")
+         "src/reporter.rkt"
+         "src/stub-registry.rkt")
 
-;; -----------------------------------------------------------------------------
+
 ;; Programa de demonstração embutido
-;; -----------------------------------------------------------------------------
 
 ;;SEM VULNERABILIDADE
 (define *demo-program*
@@ -32,9 +31,8 @@
 ;;   let bad_val = raw_input; 
 ;;   query(bad_val);") ;; Aqui não há sanitize, logo deveria acusar falha!
 
-;; -----------------------------------------------------------------------------
+
 ;; Pipeline principal: arquivo → UIR → análise → relatório
-;; -----------------------------------------------------------------------------
 (define (run-scan! target-file content color?)
   (with-handlers
     ([exn:fail?
@@ -52,9 +50,7 @@
           (exit 1)
           (exit 0)))))
 
-;; -----------------------------------------------------------------------------
 ;; CLI
-;; -----------------------------------------------------------------------------
 (module+ main
   (define demo-mode (make-parameter #f))
   (define color-mode (make-parameter #t)) ; Padrão #t (colorido)
@@ -87,3 +83,6 @@
        (displayln "     racket main.rkt --demo")
        (displayln "     racket main.rkt --no-color <arquivo.tt>")
        (exit 0)])))
+
+
+(load-stubs-from-dir! "./stubs")
