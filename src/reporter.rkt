@@ -48,16 +48,20 @@
     [else               ANSI-CYAN]))
 
 (define (format-violation v [index 1])
-  (let* ([kind    (violation-kind v)]
-         [sev     (severity->string kind)]
-         [loc     (violation-location v)]
-         [file    (if loc (src-location-file loc) "?")]
-         [line    (if loc (src-location-line loc) "?")]
+  (let* ([kind     (violation-kind v)]
+         [sev      (severity->string kind)]
+         [loc      (violation-location v)]
+         [file     (if loc (src-location-file loc) "?")]
+         [line     (if loc (src-location-line loc) "?")]
+         ;; 1. Leia o novo campo
+         [conf     (violation-confidence v)] 
          [path-str (string-join (map symbol->string (violation-taint-path v)) " → ")])
     (string-append
       "\n"
       (colorize ANSI-BOLD (format "  [~a] Vulnerability #~a — ~a\n" sev index (violation-kind v)))
       (colorize ANSI-GRAY (format "  Location   : ~a (token position ~a)\n" file line))
+      ;; 2. Exiba o campo de confiança formatado como porcentagem
+      (format "  Confidence : ~a%\n" (colorize ANSI-GREEN (number->string (* 100 conf))))
       (format "  Source Var : ~a\n" (colorize ANSI-YELLOW (symbol->string (violation-source-var v))))
       (format "  Sink Func  : ~a\n" (colorize ANSI-RED (symbol->string (violation-sink-func v))))
       (if (not (null? (violation-taint-path v)))

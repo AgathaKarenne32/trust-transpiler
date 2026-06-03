@@ -4,6 +4,7 @@
 (require net/url) ; 
 (require racket/hash) ;
 (require racket/string) ;
+(require "types.rkt")
 ;;; =============================================================================
 ;;; trust-transpiler/src/taint_engine.rkt
 ;;; Motor de Taint Analysis — Puro e Agnóstico à Linguagem de Origem
@@ -23,7 +24,8 @@
 
 (require racket/list
         "stub-registry.rkt"
-         "uir.rkt")
+         "uir.rkt"
+         "fp_scorer.rkt")
 
 (provide
   make-taint-env
@@ -85,15 +87,6 @@
 ;; -----------------------------------------------------------------------------
 ;; Estruturas de Resultado
 ;; -----------------------------------------------------------------------------
-
-;; Uma violação de segurança detectada
-(struct violation
-  (kind       ; Symbol  — tipo: 'taint-flow | 'unsanitized-sink
-   source-var ; Symbol  — variável/expr de origem do taint
-   sink-func  ; Symbol  — função sink que recebeu o valor tainted
-   taint-path ; (Listof Symbol) — caminho de propagação do taint
-   location)  ; src-location? — onde a violação ocorreu
-  #:transparent)
 
 ;; Resultado agregado de uma análise
 (struct analysis-result
@@ -169,8 +162,15 @@
        (cond
          ;; Caso 1: Verifica usando a nova is-sink? que consulta o stub
          [(and (is-sink? func module-name) any-tainted) 
-          (let ([v (violation 'unsanitized-sink (if (null? args) 'unknown (car args)) func (cons func taint-path) loc)])
-            (analysis-result (list v) env))]
+          (let* ([v-base (violation 'unsanitized-sink 
+                           (if (null? args) 'unknown (car args)) 
+                           func 
+                           (cons func taint-path) 
+                           loc 
+                           0.0)] ;; placeholder inicial
+        [score (score-finding v-base)] ;; Calcula o score
+        [v (struct-copy violation v-base [confidence score])]) ;; Atualiza com o score real
+   (analysis-result (list v) env))]
 
          ;; Caso 2: É um sanitizador → marca primeiro arg como sanitized
          [is-sanitizer 

@@ -11,7 +11,8 @@
          "src/parser.rkt"
          "src/taint_engine.rkt"
          "src/reporter.rkt"
-         "src/stub-registry.rkt")
+         "src/stub-registry.rkt"
+         "src/fp_scorer.rkt")
 
 
 ;; Programa de demonstração embutido
