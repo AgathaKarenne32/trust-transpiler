@@ -1,5 +1,7 @@
 # Trust-Transpiler v3 — Roadmap Estratégico
 
+<img width="3502" height="1868" alt="image" src="https://github.com/user-attachments/assets/c5515f33-63f1-4107-ad76-3eb486894b6a" />
+
 > Evolução do framework de análise estática (SAST) baseado em Taint Analysis para cobertura de demandas modernas de segurança, com foco em código gerado por IA, redução de falsos positivos, análise híbrida e automação de correções.
 
 ---
@@ -525,6 +527,7 @@ Dep. stubs ──► FP scorer ──► Autofix engine ──► AI detector
 - [CWE-117: Log Injection](https://cwe.mitre.org/data/definitions/117.html)
 - [SARIF v2.1 Specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 - [Static Analysis Results Interchange Format — GitHub](https://github.com/microsoft/sarif-tutorials)
+
 - Racket — [Syntax Objects & Macros](https://docs.racket-lang.org/guide/macros.html)
 - Racket — [Pattern Matching](https://docs.racket-lang.org/reference/match.html)
 
