@@ -1,6 +1,5 @@
 #lang racket/base
 
-
 ;;; trust-transpiler/main.rkt
 ;;; Ponto de Entrada CLI — Trust-Transpiler Scanner
 
@@ -12,12 +11,14 @@
          "src/taint_engine.rkt"
          "src/reporter.rkt"
          "src/stub-registry.rkt"
-         "src/fp_scorer.rkt")
+         "src/fp_scorer.rkt"
+         "src/autofix.rkt"
+         "src/policy.rkt")
 
+;; Definição da política ativa como um parâmetro para permitir mutação segura
+(define active-policy (make-parameter (security-policy 'default '() '() '() (hash))))
 
 ;; Programa de demonstração embutido
-
-;;SEM VULNERABILIDADE
 (define *demo-program*
   "let raw_input = source; 
    let safe_val = raw_input; 
@@ -26,35 +27,43 @@
    log(user_query); 
    query(safe_val);")
 
-;; COM ERRO DE VULNERABILIDADE 
-;;(define *demo-program*
-;;  "let raw_input = source; 
-;;   let bad_val = raw_input; 
-;;   query(bad_val);") ;; Aqui não há sanitize, logo deveria acusar falha!
-
-
 ;; Pipeline principal: arquivo → UIR → análise → relatório
 (define (run-scan! target-file content color?)
-  (with-handlers
-    ([exn:fail?
-      (λ (e)
-        (displayln (format "Erro durante o scan: ~a" (exn-message e)))
-        (exit 1))])
+  (with-handlers ([exn:fail? (λ (e) (displayln (format "Erro: ~a" (exn-message e))) (exit 1))])
     (let* ([uir-tree (parse-program content target-file)]
-           [result   (analyze-program uir-tree)])
-      ;; Passamos o parâmetro de cor aqui para o reporter
+           [result   (analyze-program uir-tree)]
+           [violations (analysis-result-violations result)]
+           ;; Acesso ao valor do parâmetro usando (active-policy)
+           [patches (generate-patches-for-all violations (active-policy))]) 
+
+      ;; Relatório
       (report-analysis result target-file #:color? color?)
       
-      (if (> (length (filter (λ (v) (eq? (violation-kind v) 'unsanitized-sink))
-                             (analysis-result-violations result)))
-             0)
+      ;; Sugestões
+      (for-each (λ (p) (displayln (format "Autofix: ~a" (patch-suggestion-code-suggestion p))))
+                patches)
+
+      ;; Exit code
+      (if (> (length (filter (λ (v) (eq? (violation-kind v) 'unsanitized-sink)) violations)) 0)
           (exit 1)
-          (exit 0)))))
+          (exit 0))))) 
 
 ;; CLI
 (module+ main
+  ;; Carrega stubs e policies antes de tudo
+  (load-stubs-from-dir! "./stubs")
+  
+  ;; Define a política padrão via parâmetro
+  (define-security-policy default-policy
+  #:sources (source)
+  #:sinks (query log)
+  #:sanitizers (sanitize)
+  #:fixes ((query -> sanitize #:template "(sanitize ~a)")))
+    
+  (active-policy default-policy)
+  
   (define demo-mode (make-parameter #f))
-  (define color-mode (make-parameter #t)) ; Padrão #t (colorido)
+  (define color-mode (make-parameter #t))
 
   (command-line
     #:program "trust-transpiler"
@@ -84,6 +93,3 @@
        (displayln "     racket main.rkt --demo")
        (displayln "     racket main.rkt --no-color <arquivo.tt>")
        (exit 0)])))
-
-
-(load-stubs-from-dir! "./stubs")
