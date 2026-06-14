@@ -5,6 +5,7 @@
          racket/string
          racket/match
          racket/list
+         racket/path           
          "src/uir.rkt"
          "src/parser.rkt"
          "src/taint_engine.rkt"
@@ -19,6 +20,7 @@
          )
 
 (define active-policy (make-parameter (security-policy 'default '() '() '() (hash))))
+(define watch-path (make-parameter #f))
 
 ;; Pipeline principal: arquivo → UIR → análise → linter → relatório
 ;; Adicionamos parâmetros para controle da Fase 4
@@ -81,6 +83,7 @@
     #:program "trust-transpiler"
     #:once-each
     ["--demo" "Demo padrão" (demo-mode #t)]
+    ["--watch" path "Modo Watch" (watch-path path)] ;; Captura o valor corretamente aqui
     ["--no-cache" "Desabilita cross-chunk" (cache-mode #f)]
     ["--strict-mode" "Ativa Gatekeeper" (begin (gate:enable-strict-mode!) (strict-mode #t))]
     ["--lint-only" "Executa apenas Linter" (lint-only-mode #t)]
@@ -88,8 +91,9 @@
     #:args args
 
     (cond
+      [(watch-path) (watch-mode (watch-path))] ;; A função é chamada aqui, após o parse das flags
       [(demo-mode) (run-scan! "<demo>" *demo-program* (color-mode) (cache-mode) (lint-only-mode))]
-      [(= (length args) 1) 
+      [(and (= (length args) 1) (not (watch-path)))
        (run-scan! (car args) (file->string (car args)) (color-mode) (cache-mode) (lint-only-mode))]
       [else (displayln "Uso: racket main.rkt [flags] <arquivo>") (exit 0)])))
 
@@ -107,3 +111,29 @@
    let q = string-append;
    exec(user_id);
    md5(user_id);")
+
+(define (get-mtime path)
+  (if (file-exists? path) (file-or-directory-modify-seconds path) 0))
+
+(define (watch-mode path)
+  (displayln (format "Trust-Transpiler Watch Mode — monitorando ~a" path))
+  (displayln "Aguardando alterações... (Ctrl+C para encerrar)")
+  (let loop ([last-mtimes (make-hash)])
+    ;; Identifica arquivos .tt (lista arquivos se diretório, ou o próprio se arquivo)
+    (define files (if (directory-exists? path)
+                      (filter (λ (p) (string-suffix? (path->string p) ".tt")) 
+                              (directory-list path #:build? #t))
+                      (list (string->path path))))
+    
+    (for ([f files])
+      (define current-mtime (get-mtime f))
+      (when (> current-mtime (hash-ref last-mtimes f 0))
+        (displayln (format "[~a] ~a modificado — analisando..." 
+                           (substring (number->string (current-seconds)) 8)
+                           (file-name-from-path f)))
+        (with-handlers ([exn:fail? (λ (e) (displayln (format "Erro na análise: ~a" (exn-message e))))])
+          (run-scan! (path->string f) (file->string f) #t #t #f))
+        (hash-set! last-mtimes f current-mtime)))
+    
+    (sleep 0.5) ; Polling a cada 500ms
+    (loop last-mtimes)))

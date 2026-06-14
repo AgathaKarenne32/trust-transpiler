@@ -27,6 +27,15 @@ case "${1:-help}" in
     echo "→ Executando análise de demonstração..."
     racket main.rkt --demo
     ;;
+  watch)
+    check_racket
+    if [ -z "$2" ]; then
+      echo "Uso: ./run.sh watch <diretório ou arquivo.tt>"
+      exit 1
+    fi
+    echo "→ Iniciando Watch Mode em: $2"
+    racket main.rkt --watch "$2"
+    ;;
 
   scan)
     check_racket
@@ -62,6 +71,7 @@ case "${1:-help}" in
     echo "  ./run.sh scan <arquivo.tt>       — Analisa arquivo .tt"
     echo "  ./run.sh scan --no-color <file>  — Sem cores (CI/CD)"
     echo "  ./run.sh test                    — Executa testes unitários"
+    echo "  ./run.sh watch <path>            — Monitora alterações e analisa"
     echo ""
     ;;
 
