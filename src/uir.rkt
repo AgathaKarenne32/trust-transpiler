@@ -4,18 +4,19 @@
 ;;; trust-transpiler/src/uir.rkt
 ;;; Universal Intermediate Representation (UIR)
 ;;;
-;;; A linguagem de origem (C, Python, JS...) é irrelevante após a fase de parse.
-;;; O motor de análise opera exclusivamente sobre estas estruturas imutáveis.
-;;; Todas as structs são definidas com #:transparent para facilitar debugging
-;;; e com campos imutáveis (padrão em Racket) para garantir pureza funcional.
+;;; MUDANÇA FASE 4
+;;; ─────────────
+;;; Adicionado `taint:unknown-api` à lattice.
+;;; Lattice completa: clean(0) < sanitized(1) < tainted(2) < unknown-api(3)
 ;;; =============================================================================
 
 (provide
   ;; Tipos de Taint
   taint-label?
-  taint:clean taint:tainted taint:sanitized
+  taint:clean taint:tainted taint:sanitized taint:unknown-api
   taint-label->string
-
+  taint-rank
+  
   ;; Nós da UIR
   uir-node?
   (struct-out uir:assign)
@@ -24,49 +25,50 @@
   (struct-out uir:sequence)
   (struct-out uir:noop)
 
-  ;; Metadados de localização (para relatórios)
+  ;; Metadados de localização
   (struct-out src-location))
 
 ;; -----------------------------------------------------------------------------
-;; Localização no código-fonte original (agnóstica de linguagem)
+;; Localização no código-fonte original
 ;; -----------------------------------------------------------------------------
 (struct src-location
-  (file    ; String — caminho do arquivo de origem
-   line    ; Natural — linha no arquivo original
-   col)    ; Natural — coluna no arquivo original
+  (file line col)
   #:transparent)
 
 ;; -----------------------------------------------------------------------------
 ;; Rótulos de Taint (Taint Labels)
-;;
-;; Representamos taint como um tipo algébrico simples usando símbolos Racket.
-;; A função `taint-label?` é o predicado de tipo.
-;;
-;; Lattice de segurança (ordem parcial):
-;;   clean  <  tainted
-;;   tainted -> sanitized  (sanitização quebra a propagação)
 ;; -----------------------------------------------------------------------------
-(define (taint-label? v)
-  (member v '(clean tainted sanitized)))
 
-;; Construtores simbólicos — usamos define em vez de enum para manter
-;; a compatibilidade com pattern matching via `match`.
-(define taint:clean      'clean)
-(define taint:tainted    'tainted)
-(define taint:sanitized  'sanitized)
+;; FASE 4: Adicionado 'unknown-api' ao predicado
+(define (taint-label? v)
+  (member v '(clean tainted sanitized unknown-api)))
+
+(define taint:clean       'clean)
+(define taint:tainted     'tainted)
+(define taint:sanitized   'sanitized)
+(define taint:unknown-api 'unknown-api) ;; FASE 4: APIs não registradas
+
+;; FASE 4: Rank atualizado (3 é o mais perigoso/restritivo)
+(define (taint-rank label)
+  (case label
+    [(clean)       0]
+    [(sanitized)   1]
+    [(tainted)     2]
+    [(unknown-api) 3]
+    [else          0]))
 
 (define (taint-label->string label)
   (case label
-    [(clean)     "CLEAN"]
-    [(tainted)   "TAINTED"]
-    [(sanitized) "SANITIZED"]
-    [else        "UNKNOWN"]))
+    [(clean)       "CLEAN"]
+    [(tainted)     "TAINTED"]
+    [(sanitized)   "SANITIZED"]
+    [(unknown-api) "UNKNOWN-API"]
+    [else          "UNKNOWN"]))
 
 ;; -----------------------------------------------------------------------------
-;; Nós da UIR — Cobertura mínima para programas imperativos
+;; Nós da UIR
 ;; -----------------------------------------------------------------------------
 
-;; Predicado genérico de nó UIR
 (define (uir-node? v)
   (or (uir:assign? v)
       (uir:call? v)
@@ -74,45 +76,22 @@
       (uir:sequence? v)
       (uir:noop? v)))
 
-;; --- Atribuição ---------------------------------------------------------------
-;; Representa:  var = expr
-;; `source-taint` indica se esta atribuição é um SOURCE de dados externos
-;; (ex: leitura de stdin, parâmetro HTTP, env var).
 (struct uir:assign
-  (var          ; Symbol  — nome da variável de destino
-   expr         ; Any     — valor ou nome de variável de origem (simplificado)
-   source-taint ; taint-label? — rótulo inicial injetado nesta atribuição
-   location)    ; src-location? — onde ocorreu no código original
+  (var expr source-taint location)
   #:transparent)
 
-;; --- Chamada de Função --------------------------------------------------------
-;; Representa:  func(arg1, arg2, ...)
-;; `sink?` é #t quando esta chamada é um SINK sensível (log, query, exec, etc.)
 (struct uir:call
-  (func      ; Symbol       — nome da função chamada
-   args       ; (Listof Any) — lista de argumentos (vars ou literais)
-   sink?      ; Boolean      — marca este call como ponto de sink
-   location)  ; src-location?
+  (func args sink? location)
   #:transparent)
 
-;; --- Salto Condicional --------------------------------------------------------
-;; Representa:  if (cond) then-branch else-branch
 (struct uir:branch
-  (condition    ; Any       — variável ou expr de condição
-   then-branch  ; uir-node? — nó executado se verdadeiro
-   else-branch  ; uir-node? — nó executado se falso (pode ser uir:noop)
-   location)    ; src-location?
+  (condition then-branch else-branch location)
   #:transparent)
 
-;; --- Sequência ----------------------------------------------------------------
-;; Lista ordenada de instruções — o bloco básico de qualquer programa.
 (struct uir:sequence
-  (stmts    ; (Listof uir-node?) — instruções em ordem
-   location) ; src-location?
+  (stmts location)
   #:transparent)
 
-;; --- No-op --------------------------------------------------------------------
-;; Instrução vazia; usada como else-branch padrão e para testes.
 (struct uir:noop
-  (location) ; src-location?
+  (location)
   #:transparent)

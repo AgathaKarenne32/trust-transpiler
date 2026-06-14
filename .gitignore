@@ -2,3 +2,9 @@ compiled/
 *.rkt~
 #*#
 .DS_Store
+
+.trust-transpiler/cache/
+*.taint-cache
+
+compiled/
+*.zo
