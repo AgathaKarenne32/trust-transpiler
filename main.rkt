@@ -5,7 +5,10 @@
          racket/string
          racket/match
          racket/list
-         racket/path           
+         racket/path  
+         racket/system
+         racket/port   
+         "src/types.rkt"  
          "src/uir.rkt"
          "src/parser.rkt"
          "src/taint_engine.rkt"
@@ -19,8 +22,14 @@
          "src/ai_security_linter.rkt"
          )
 
+(define (severity->int s)
+  (case (string->symbol (string-downcase (symbol->string s)))
+    [(high) 3] [(medium) 2] [(info) 1] [else 1]))
+
 (define active-policy (make-parameter (security-policy 'default '() '() '() (hash))))
 (define watch-path (make-parameter #f))
+(define diff-range (make-parameter #f))
+(define fail-level (make-parameter 'info)) ;; info < medium < high
 
 ;; Pipeline principal: arquivo → UIR → análise → linter → relatório
 ;; Adicionamos parâmetros para controle da Fase 4
@@ -61,6 +70,31 @@
           (exit 1)
           (exit 0)))))
 
+(define (run-scan-and-return target-file content color? use-cache? lint-only?)
+  (with-handlers ([exn:fail? (λ (e) (displayln (format "Erro: ~a" (exn-message e))) '())])
+    (let* ([uir-tree (parse-program content target-file)]
+           [result (if lint-only? 
+                       (analysis-result '() (make-taint-env))
+                       (analyze-program uir-tree (make-taint-env)))]
+           [lint-findings (run-linter uir-tree)]
+           [lint-violations (map lint-finding->violation lint-findings)]
+           [violations (append (analysis-result-violations result) lint-violations)])
+      violations)))
+
+(define (check-violations v-list)
+  (define min-sev (severity->int (fail-level)))
+  
+  (define (get-severity-from-kind kind)
+    (case kind
+      [(unsanitized-sink) 3] ;; HIGH
+      [(policy-violation) 2] ;; MEDIUM
+      [else 1]))             ;; INFO
+
+  (filter (λ (v) 
+            ;; O acessor correto para o struct violation é violation-kind
+            (>= (get-severity-from-kind (violation-kind v)) min-sev)) 
+          v-list))
+
 (module+ main
   (load-stubs-from-dir! "./stubs")
   
@@ -79,9 +113,22 @@
   (define strict-mode (make-parameter #f))
   (define lint-only-mode (make-parameter #f))
 
+  (define (severity->int s)
+  (case (string->symbol (string-downcase (symbol->string s)))
+    [(high) 3] [(medium) 2] [(info) 1] [else 1]))
+
+  (define (get-changed-files range)
+    (define-values (sp out in err) (subprocess #f #f #f "git" "diff" "--name-only" range))
+      (subprocess-wait sp)
+        (if (not (= (subprocess-status sp) 0))
+        (begin (displayln "Erro: Range de commit inválido ou não é um repositório git.") (exit 2))
+        (filter (λ (f) (string-suffix? f ".tt")) (string-split (port->string out) "\n"))))
+
   (command-line
     #:program "trust-transpiler"
     #:once-each
+    ["--diff" range "Análise incremental de PR" (diff-range range)]
+    ["--fail-on" level "Severidade mínima de bloqueio" (fail-level (string->symbol level))]
     ["--demo" "Demo padrão" (demo-mode #t)]
     ["--watch" path "Modo Watch" (watch-path path)] ;; Captura o valor corretamente aqui
     ["--no-cache" "Desabilita cross-chunk" (cache-mode #f)]
@@ -91,7 +138,28 @@
     #:args args
 
     (cond
-      [(watch-path) (watch-mode (watch-path))] ;; A função é chamada aqui, após o parse das flags
+      [(diff-range)
+     (let* ([files (get-changed-files (diff-range))]
+            [min-sev (severity->int (fail-level))])
+       (displayln (format "Trust-Transpiler — Diff Analysis\nRange: ~a\nArquivos: ~a" (diff-range) (length files)))
+       
+       ;; Coleta violações de todos os arquivos
+       (define all-violations 
+         (apply append 
+                (for/list ([f files])
+                  (displayln (format "Analisando: ~a" f))
+                  (run-scan-and-return (path->string f) (file->string f) (color-mode) #t #f))))
+       
+       ;; Filtra usando a função check-violations que já criamos
+       (define filtered (check-violations all-violations))
+       
+       (displayln (format "\n─────────────────────────────────────\nResultado: ~a violação(ões) encontrada(s)" (length filtered)))
+       
+       (if (> (length filtered) 0)
+           (begin (displayln (format "Status: FALHOU (--fail-on ~a)" (fail-level))) (exit 1))
+           (begin (displayln "Status: PASSOU") (exit 0))))]
+
+      [(watch-path) (watch-mode (watch-path))]
       [(demo-mode) (run-scan! "<demo>" *demo-program* (color-mode) (cache-mode) (lint-only-mode))]
       [(and (= (length args) 1) (not (watch-path)))
        (run-scan! (car args) (file->string (car args)) (color-mode) (cache-mode) (lint-only-mode))]

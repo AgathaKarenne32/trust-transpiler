@@ -1,8 +1,13 @@
-name: Trust-Transpiler CI
+name: Trust-Transpiler CI Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
+  # Job 1: Testes Unitários e Demo
   test-and-scan:
     runs-on: ubuntu-latest
     steps:
@@ -15,3 +20,21 @@ jobs:
         run: racket main.rkt --demo
       - name: Rodar Testes Unitários
         run: racket test/taint_test.rkt
+
+  # Job 2: Análise de Diff para PRs (apenas em Pull Requests)
+  sast-scan-diff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Necessário para o git diff funcionar
+
+      - name: Install Racket
+        run: sudo apt-get install -y racket
+
+      - name: Run Diff Scan
+        run: |
+          chmod +x run.sh
+          # Executa o scan incremental apenas nos arquivos alterados
+          ./run.sh scan --diff origin/${{ github.base_ref }}..HEAD --fail-on high --no-color

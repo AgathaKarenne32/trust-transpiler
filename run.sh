@@ -36,7 +36,6 @@ case "${1:-help}" in
     echo "→ Iniciando Watch Mode em: $2"
     racket main.rkt --watch "$2"
     ;;
-
   scan)
     check_racket
     shift
