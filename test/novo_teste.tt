@@ -1,1 +1,1 @@
-input x from user; sink db_execute(x)
+let user = source;

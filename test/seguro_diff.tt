@@ -1,1 +1,1 @@
-assign data = "fixo"; sink log(data)
+let data = "fixo"; sink(data);
