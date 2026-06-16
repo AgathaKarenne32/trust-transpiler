@@ -1,0 +1,4 @@
+let v1 = source;
+query(v1);
+let v2 = source;
+log(v2);

@@ -22,27 +22,25 @@
          "src/ai_security_linter.rkt"
          )
 
+;; 1. Definição Global da Política (Movido para fora do module+)
+(define default-policy
+  (security-policy 'default '(source) '(query log) '(sanitize) 
+                   (hash 'query (fix-entry 'sanitize "(sanitize ~a)"))))
+
 (define (severity->int s)
   (case (string->symbol (string-downcase (symbol->string s)))
     [(high) 3] [(medium) 2] [(info) 1] [else 1]))
 
 (define (check-violations v-list)
   (define min-sev (severity->int (fail-level)))
-  
   (define (get-severity-from-kind kind)
-    (case kind
-      [(unsanitized-sink) 3] ;; HIGH
-      [(policy-violation) 2] ;; MEDIUM
-      [else 1]))             ;; INFO
+    (case kind [(unsanitized-sink) 3] [(policy-violation) 2] [else 1]))
+  (filter (λ (v) (>= (get-severity-from-kind (violation-kind v)) min-sev)) v-list))
 
-  (filter (λ (v) 
-            (>= (get-severity-from-kind (violation-kind v)) min-sev)) 
-          v-list))
-
-(define active-policy (make-parameter (security-policy 'default '() '() '() (hash))))
+(define active-policy (make-parameter default-policy))
 (define watch-path (make-parameter #f))
 (define diff-range (make-parameter #f))
-(define fail-level (make-parameter 'info)) ;; info < medium < high
+(define fail-level (make-parameter 'info))
 
 (define (run-scan! target-file content color? use-cache? lint-only?)
   (with-handlers ([exn:fail? (λ (e) (displayln (format "Erro: ~a" (exn-message e))) (exit 1))])
@@ -77,29 +75,34 @@
            [result (if lint-only? 
                        (analysis-result '() (make-taint-env))
                        (analyze-program uir-tree (make-taint-env)))]
+
            [_ (displayln (format "Debug: Violações encontradas pelo motor: ~a" (analysis-result-violations result)))]
            (displayln (format "Debug: AST gerada: ~a" uir-tree))
            [lint-findings (run-linter uir-tree)]
            [lint-violations (map lint-finding->violation lint-findings)]
-           [violations (append (analysis-result-violations result) lint-violations)])
+           [violations (append (analysis-result-violations result) (map lint-finding->violation (run-linter uir-tree)))])
       violations)))
+
+(define (run-interactive-fix target-file)
+  (load-stubs-from-dir! "./stubs")
+  (active-policy default-policy)
+  (define content (file->string target-file))
+  (define violations (run-scan-and-return target-file content #t #t #f))
+  (if (null? violations)
+      (displayln "Nenhuma violação encontrada.")
+      (process-violations-interactively target-file content violations)))
 
 (module+ main
   (load-stubs-from-dir! "./stubs")
-  
-  (define-security-policy default-policy
-    #:sources (source)
-    #:sinks (query log)
-    #:sanitizers (sanitize)
-    #:fixes ((query -> sanitize #:template "(sanitize ~a)")))
-    
   (active-policy default-policy)
-  
+
   (define demo-mode (make-parameter #f))
   (define color-mode (make-parameter #t))
+  (define watch-path (make-parameter #f))
   (define cache-mode (make-parameter #t))
   (define strict-mode (make-parameter #f))
   (define lint-only-mode (make-parameter #f))
+  (define diff-range (make-parameter #f))
 
   (define (get-changed-files range)
     ;; Range chega como "HEAD~1..HEAD"
@@ -130,7 +133,7 @@
     ["--strict-mode" "Ativa Gatekeeper" (begin (gate:enable-strict-mode!) (strict-mode #t))]
     ["--lint-only" "Executa apenas Linter" (lint-only-mode #t)]
     ["--no-color" "Sem cor" (color-mode #f)]
-    #:args args
+    #:args positional-args
 
     (cond
       [(diff-range)
@@ -149,9 +152,14 @@
 
       [(watch-path) (watch-mode (watch-path))]
       [(demo-mode) (run-scan! "<demo>" *demo-program* (color-mode) (cache-mode) (lint-only-mode))]
-      [(not (null? args))
-       (run-scan! (car args) (file->string (car args)) (color-mode) (cache-mode) (lint-only-mode))]
-      [else (displayln "Uso: racket main.rkt [flags] <arquivo>") (exit 0)])))
+      [(and (not (null? positional-args)) (string=? (car positional-args) "fix"))
+       (if (and (pair? (cdr positional-args)) (cadr positional-args))
+       (run-interactive-fix (cadr positional-args))
+       (displayln "Erro: O comando 'fix' requer um nome de arquivo."))]
+      [(not (null? positional-args))
+       (run-scan! (car positional-args) (file->string (car positional-args)) (color-mode) (cache-mode) (lint-only-mode))]
+      
+      [else (displayln "Uso: trust-transpiler [fix <arquivo> | <arquivo>]") (exit 0)])))
 
 (define *demo-program* "let raw_input = source; let safe_val = raw_input; sanitize(safe_val); let user_query = source; log(user_query); query(safe_val);")
 (define (get-mtime path) (if (file-exists? path) (file-or-directory-modify-seconds path) 0))

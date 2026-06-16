@@ -36,6 +36,10 @@ case "${1:-help}" in
     echo "→ Iniciando Watch Mode em: $2"
     racket main.rkt --watch "$2"
     ;;
+  fix)      
+    shift; 
+    racket main.rkt fix "$@" 
+    ;; 
   scan)
     check_racket
     shift
@@ -46,7 +50,6 @@ case "${1:-help}" in
     echo "→ Analisando: $*"
     racket main.rkt "$@"
     ;;
-
   test)
     check_racket
     echo "→ Executando suíte de testes unitários..."
@@ -72,6 +75,7 @@ case "${1:-help}" in
     echo "  ./run.sh test                    — Executa testes unitários"
     echo "  ./run.sh watch <path>            — Monitora alterações e analisa"
     echo ""
+    echo "  ./run.sh fix <arquivo.tt>      — Modo interativo de correção"
     ;;
 
   *)

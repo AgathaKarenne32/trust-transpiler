@@ -1,0 +1,2 @@
+let v1 = source;
+query(v1);
