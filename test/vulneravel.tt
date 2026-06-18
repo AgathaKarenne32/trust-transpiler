@@ -1,2 +1,2 @@
-(sanitize let raw_input = source;)
+let raw_input = source;
 query(raw_input);

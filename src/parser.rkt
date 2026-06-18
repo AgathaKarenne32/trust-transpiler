@@ -5,10 +5,6 @@
          racket/list
          "uir.rkt")
 
-;;; =============================================================================
-;;; trust-transpiler/src/parser.rkt
-;;; =============================================================================
-
 (provide parse-program
          parse-string)
 
@@ -19,15 +15,14 @@
   '("source" "source()" "user-input()" "read-line" "getenv"))
 
 ;; -----------------------------------------------------------------------------
-;; Tokenizer: Mantém (token . linha)
+;; Tokenizer
 ;; -----------------------------------------------------------------------------
 (define (tokenize content)
   (define lines (string-split content "\n" #:trim? #f))
-  (apply append 
+  (apply append
          (for/list ([line-str lines] [l (in-naturals 1)])
-           (let* ([normalized 
-                   ;; Garante que '(' e ')' sempre tenham espaços ao redor
-                   (string-replace (string-replace line-str "(" " ( ") 
+           (let* ([normalized
+                   (string-replace (string-replace line-str "(" " ( ")
                                    ")" " ) ")]
                   [normalized-final
                    (foldl (λ (ch str)
@@ -79,8 +74,7 @@
 (define (parse-stmt ctx)
   (let ([peek (ctx-peek ctx)])
     (match peek
-      ;; 1. Trata parênteses como delimitadores transparentes: 
-      ;; Consome o '(', processa o conteúdo como um stmt, consome o ')'
+      ;; 1. Parênteses de agrupamento
       [(cons "(" _)
        (ctx-consume! ctx)
        (let ([stmt (parse-stmt ctx)])
@@ -88,7 +82,7 @@
            (ctx-consume! ctx))
          stmt)]
 
-      ;; 2. Sanitização explícita: sanitize(...)
+      ;; 2. Sanitização
       [(cons "sanitize" _)
        (ctx-consume! ctx)
        (ctx-expect! ctx "(")
@@ -96,28 +90,40 @@
               [_   (ctx-expect! ctx ")")])
          (uir:call 'sanitize (list arg) #f (make-loc ctx)))]
 
-      ;; 3. Definição de variável: let ...
+      ;; 3. Let  ← displayln removido; variáveis corrigidas
       [(cons "let" _)
        (ctx-consume! ctx)
-       (let* ([var (string->symbol (car (ctx-consume! ctx)))]
-              [_    (ctx-expect! ctx "=")]
-              [expr (car (ctx-consume! ctx))]
-              [_    (when (and (ctx-peek ctx) (equal? (car (ctx-peek ctx)) ";")) (ctx-consume! ctx))])
-         (uir:assign var expr (if (member expr *source-expressions*) taint:tainted taint:clean) (make-loc ctx)))]
+       (let* ([var   (string->symbol (car (ctx-consume! ctx)))]
+              [_     (ctx-expect! ctx "=")]
+              [expr  (car (ctx-consume! ctx))]
+              [_     (when (and (ctx-peek ctx)
+                                (equal? (car (ctx-peek ctx)) ";"))
+                       (ctx-consume! ctx))]
+              [loc   (make-loc ctx)]
+              [taint (if (member expr *source-expressions*)
+                         taint:tainted
+                         taint:clean)])
+         (uir:assign var expr taint loc))]
 
-      ;; 4. Chamadas (incluindo query)
+      ;; 4. Chamada de função (func(arg))
       [(cons func-name _)
        (ctx-consume! ctx)
        (if (and (ctx-peek ctx) (equal? (car (ctx-peek ctx)) "("))
            (begin
-             (ctx-consume! ctx) ;; consome '('
-             (let* ([arg (if (and (ctx-peek ctx) (not (equal? (car (ctx-peek ctx)) ")")))
-                             (string->symbol (car (ctx-consume! ctx)))
-                             #f)]
-                    [_ (ctx-expect! ctx ")")]
-                    [_ (when (and (ctx-peek ctx) (equal? (car (ctx-peek ctx)) ";")) (ctx-consume! ctx))])
-               (uir:call (string->symbol func-name) (if arg (list arg) '()) #t (make-loc ctx))))
+             (ctx-consume! ctx)
+             (let* ([next (ctx-peek ctx)]
+                    [arg  (if (and next (not (equal? (car next) ")")))
+                              (string->symbol (car (ctx-consume! ctx)))
+                              #f)]
+                    [_    (ctx-expect! ctx ")")]
+                    [_    (when (and (ctx-peek ctx)
+                                     (equal? (car (ctx-peek ctx)) ";"))
+                            (ctx-consume! ctx))])
+               (uir:call (string->symbol func-name)
+                         (if arg (list arg) '())
+                         #t
+                         (make-loc ctx))))
            #f)]
-      
-      ;; 5. Fallback para ignorar tokens desconhecidos e tentar avançar
-      [_ (ctx-consume! ctx) #f])))
+
+      ;; 5. Fallback
+      [_ (ctx-consume! ctx) (parse-stmt ctx)])))
