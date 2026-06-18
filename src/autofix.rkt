@@ -47,9 +47,13 @@
 (require racket/match
          racket/string
          racket/list
+         racket/port
+         racket/system
+         racket/file
          "uir.rkt"
          "types.rkt"
-         "policy.rkt")
+         "policy.rkt"
+         "reporter.rkt")
 
 (provide
   ;; Structs exportados
@@ -61,6 +65,7 @@
   generate-patches-for-all
   apply-patch-to-sequence
   apply-patches-to-uir
+  process-violations-interactively
 
   ;; Utilitários
   render-code-suggestion
@@ -119,7 +124,7 @@
 
 (define (generate-patch v policy)
   (match v
-    [(violation kind source-var sink-func taint-path loc confidence)
+    [(violation kind source-var sink-func taint-path loc confidence severity)
      (let ([fix (policy-fix-for policy sink-func)])
        (if (not fix)
            ;; Sem mapeamento na política → sem patch automático
@@ -313,3 +318,66 @@
                line))]
     [(patch-op type _ _)
      (format "~a <op>" type)]))
+
+(define (process-violations-interactively file-path content violations)
+  (unless (file-exists? (string-append file-path ".bak"))
+    (copy-file file-path (string-append file-path ".bak")))
+  
+  (define stats (make-hash '([applied . 0] [skipped . 0] [ignored . 0])))
+  
+  ;; 2. Loop de interação
+  (for ([v violations] [idx (in-naturals 1)])
+    (display-violation-menu v idx)
+    (let loop ()
+      (display "> ")
+      (flush-output)
+      (match (string-downcase (read-line))
+        ["s" (begin 
+               (apply-patch-to-file! file-path v)
+               (hash-update! stats 'applied add1))]
+        ["n" (hash-update! stats 'skipped add1)]
+        ["d" (show-diff file-path) (loop)]
+        ["p" (begin (displayln "Política: (query -> sanitize)") (loop))]
+        ["i" (begin (displayln "Regra ignorada.") (hash-update! stats 'ignored add1))]
+        [else (displayln "Opção inválida.") (loop)])))
+  
+  (displayln "\n══════════════════════════════════════════")
+  (displayln (format "Autofix concluído: ~a aplicados, ~a pulados, ~a ignorados." 
+                     (hash-ref stats 'applied) 
+                     (hash-ref stats 'skipped) 
+                     (hash-ref stats 'ignored)))) 
+
+(define (display-violation-menu v idx)
+  (displayln (format "\n[~a] VULNERABILIDADE: ~a" idx (violation-kind v)))
+  (displayln (format "Localização: linha ~a" (src-location-line (violation-location v))))
+  (displayln "[s] Aplicar [n] Pular [d] Diff [p] Política [i] Ignorar"))
+
+(define (apply-patch-to-file! path v)
+  (unless (file-exists? (string-append path ".bak"))
+    (copy-file path (string-append path ".bak")))
+  
+  (let* ([lines (file->lines path)]
+         [line-num (max 1 (src-location-line (violation-location v)))]
+         [idx (- line-num 1)])
+    
+    ;; Proteção: verifica se o índice é válido para o arquivo lido
+    (if (and (>= idx 0) (< idx (length lines)))
+        (let* ([target-line (list-ref lines idx)]
+               [sanitized-line (string-append "(sanitize " target-line ")")]
+               [new-lines (append (take lines idx)
+                                  (list sanitized-line)
+                                  (drop lines (+ idx 1)))])
+          (with-output-to-file path #:exists 'replace
+            (λ () (for-each displayln new-lines)))
+          (displayln (format "Sucesso: linha ~a sanitizada." line-num)))
+        
+        ;; Fallback: se a linha for inválida, anexa ao final (segurança primeiro)
+        (begin
+          (displayln (format "Aviso: Linha ~a não encontrada. Aplicando sanitização ao final do arquivo." line-num))
+          (with-output-to-file path #:exists 'append
+            (λ () (displayln "(sanitize (last-line-of-file))")))))))
+
+(define (show-diff path)
+  (if (file-exists? (string-append path ".bak"))
+      (system (format "diff -u ~a.bak ~a" path path))
+      (displayln "Backup não encontrado.")))

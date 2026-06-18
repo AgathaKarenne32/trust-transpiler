@@ -8,6 +8,7 @@
          "stub-registry.rkt"
          "uir.rkt"
          "fp_scorer.rkt"
+         "cross_chunk_tracker.rkt"
          (prefix-in gate: "api_gatekeeper.rkt")) 
 ;;; =============================================================================
 ;;; trust-transpiler/src/taint_engine.rkt
@@ -95,13 +96,19 @@
             [module-name (extract-module-name func)]
             ;; FASE 4: Integração Gatekeeper
             [gate-result (gate:analyze-call-node func args (λ (v) (env-lookup env v)))]
-            [is-unknown (eq? gate-result taint:unknown-api)])
+            [is-unknown (eq? gate-result taint:unknown-api)]
+            [cross-effect (get-cross-chunk-effect func args)])
        (cond
          [is-unknown
-          (let ([v (violation 'unknown-api (if (null? args) 'unknown (car args)) func (list func) loc gate:UNKNOWN-API-SCORE)])
+          (let ([v (violation 'unknown-api (if (null? args) 'unknown (car args)) func (list func) loc gate:UNKNOWN-API-SCORE 'CRITICAL)])
             (analysis-result (list v) env))]
+         [cross-effect
+          (let* ([new-env (if (and (not (null? args)) (not (null? (cdr args)))) 
+                              (env-set env (car args) cross-effect) 
+                              env)])
+            (analysis-result '() new-env))]
          [(and (is-sink? func module-name) any-tainted)
-          (let* ([v-base (violation 'unsanitized-sink (if (null? args) 'unknown (car args)) func (cons func taint-path) loc 0.0)]
+          (let* ([v-base (violation 'unsanitized-sink (if (null? args) 'unknown (car args)) func (cons func taint-path) loc 0.0 'HIGH)]
                  [score (score-finding v-base)]
                  [v (struct-copy violation v-base [confidence score])])
             (analysis-result (list v) env))]

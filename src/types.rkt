@@ -8,5 +8,6 @@
    sink-func  ; Symbol  — função sink que recebeu o valor tainted
    taint-path ; (Listof Symbol) — caminho de propagação do taint
    location   ; src-location? — onde a violação ocorre
-   confidence ) ;; float (0.0 a 1.0)  
+   confidence  ;; float (0.0 a 1.0)
+   severity )  
   #:transparent)

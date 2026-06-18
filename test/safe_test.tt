@@ -1,0 +1,1 @@
+let x = source; sanitize(x); query(x);
