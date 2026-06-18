@@ -53,11 +53,14 @@
          racket/string
          racket/path  
          racket/file
-         racket/hash)
+         racket/hash
+         "stub-registry.rkt" 
+         "uir.rkt")
 
 (provide
   ;; Estrutura de dados
   (struct-out taint-snapshot)
+  (get-cross-chunk-effect)
 
   ;; I/O do snapshot
   export-taint-snapshot
@@ -277,3 +280,12 @@
       (taint-snapshot-source-file s1)  ; mantém o arquivo original
       (current-seconds)
       (hash->list merged))))
+
+;; Resolve o efeito de uma chamada externa baseando-se no Stub Registry
+(define (get-cross-chunk-effect func-name args)
+  (let ([stub (lookup-stub func-name)])
+    (if stub
+        ;; Se a função é um stub, retornamos o mapeamento de taint definido
+        ;; Ex: Se args[0] é tainted e o stub diz que retorna tainted:
+        (calculate-stub-taint stub args)
+        #f))) ;; Não é um Cross-Chunk conhecido

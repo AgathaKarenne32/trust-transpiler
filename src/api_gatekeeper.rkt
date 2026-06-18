@@ -51,7 +51,8 @@
   *strict-mode*
   enable-strict-mode!
   disable-strict-mode!
-  UNKNOWN-API-SCORE)
+  UNKNOWN-API-SCORE
+  evaluate-violations)
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Constantes e Configuração
@@ -101,10 +102,12 @@
 
 (define (analyze-call-node func-sym args env-lookup-fn)
   (cond
+    ;; Se strict-mode está ativo e a API é desconhecida, marca como unknown-api
     [(and (*strict-mode*)
           (not (known-api? func-sym))
           (not (stub-known? func-sym)))
-     taint:unknown-api]
+     'taint:unknown-api]
+    ;; Se não estamos em strict-mode, o comportamento padrão é ser defensivo
     [(and (not (*strict-mode*))
           (not (known-api? func-sym))
           (not (stub-known? func-sym)))
@@ -128,3 +131,10 @@
     [(and (*strict-mode*) (not (known-api? func-sym))) UNKNOWN-API-SCORE]
     [(and has-tainted-args? (known-api? func-sym)) 0.70]
     [else 0.10]))
+
+(define (evaluate-violations violations)
+  (let ([severities (map violation-severity violations)])
+    (cond
+      [(member 'CRITICAL severities) 'BLOCK]
+      [(member 'HIGH severities)     'BLOCK]
+      [else                          'PASS])))

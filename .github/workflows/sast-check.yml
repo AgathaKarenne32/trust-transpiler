@@ -21,6 +21,14 @@ jobs:
       - name: Rodar Testes Unitários
         run: racket test/taint_test.rkt
 
+  sast-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Trust-Transpiler
+        run: ./run.sh --diff --strict-mode
+        # O script falhará se o exit code for 1 devido ao Gatekeeper
+
   # Job 2: Análise de Diff para PRs (apenas em Pull Requests)
   sast-scan-diff:
     if: github.event_name == 'pull_request'
@@ -36,5 +44,20 @@ jobs:
       - name: Run Diff Scan
         run: |
           chmod +x run.sh
-          # Executa o scan incremental apenas nos arquivos alterados
-          ./run.sh scan --diff origin/${{ github.base_ref }}..HEAD --fail-on high --no-color
+          # Executa o scan incremental apenas nos arquivos alterados com strict-mode ativado
+          ./run.sh --diff origin/${{ github.base_ref }}..HEAD --fail-on high --no-color --strict-mode
+
+# Job 3: Validação de Integridade do Pipeline (Sanity Check)
+  pipeline-integrity:
+    needs: test-and-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Instalar Racket
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y racket
+      - name: Executar Pipeline de Integridade
+        run: |
+          chmod +x test/full_pipeline_test.sh
+          ./test/full_pipeline_test.sh

@@ -104,6 +104,13 @@
   (define lint-only-mode (make-parameter #f))
   (define diff-range (make-parameter #f))
 
+  (define (run-scan-and-evaluate! target-file content)
+    (let* ([violations (run-scan-and-return target-file content #f #t #f)]
+          [verdict (gate:evaluate-violations violations)])
+      (if (equal? verdict 'BLOCK)
+          (begin (displayln "Gatekeeper: Veto de Segurança!") (exit 1))
+          (exit 0))))
+
   (define (get-changed-files range)
     ;; Range chega como "HEAD~1..HEAD"
     (define-values (sp out in err) 
@@ -145,11 +152,12 @@
                     (displayln (format "Analisando: ~a" f))
                     (run-scan-and-return f (file->string f) (color-mode) #t #f))))
          (define filtered (check-violations all-violations))
+         (define verdict (gate:evaluate-violations filtered))
          (displayln (format "\n─────────────────────────────────────\nResultado: ~a violação(ões) encontrada(s)" (length filtered)))
-         (if (> (length filtered) 0)
-             (begin (displayln (format "Status: FALHOU (--fail-on ~a)" (fail-level))) (exit 1))
+         (if (or (> (length filtered) 0) (equal? verdict 'BLOCK))
+             (begin (displayln (format "Status: FALHOU — Gatekeeper Veto")) (exit 1))
              (begin (displayln "Status: PASSOU") (exit 0))))]
-
+      
       [(watch-path) (watch-mode (watch-path))]
       [(demo-mode) (run-scan! "<demo>" *demo-program* (color-mode) (cache-mode) (lint-only-mode))]
       [(and (not (null? positional-args)) (string=? (car positional-args) "fix"))
@@ -157,9 +165,14 @@
        (run-interactive-fix (cadr positional-args))
        (displayln "Erro: O comando 'fix' requer um nome de arquivo."))]
       [(not (null? positional-args))
-       (run-scan! (car positional-args) (file->string (car positional-args)) (color-mode) (cache-mode) (lint-only-mode))]
+       (let* ([target (car positional-args)]
+              [content (file->string target)]
+              [v-list (run-scan-and-return target content (color-mode) (cache-mode) (lint-only-mode))]
+              [verdict (gate:evaluate-violations (check-violations v-list))])
+         (if (equal? verdict 'BLOCK) (exit 1) (exit 0)))]
       
       [else (displayln "Uso: trust-transpiler [fix <arquivo> | <arquivo>]") (exit 0)])))
+
 
 (define *demo-program* "let raw_input = source; let safe_val = raw_input; sanitize(safe_val); let user_query = source; log(user_query); query(safe_val);")
 (define (get-mtime path) (if (file-exists? path) (file-or-directory-modify-seconds path) 0))
@@ -177,3 +190,4 @@
         (hash-set! last-mtimes f current-mtime)))
     (sleep 0.5)
     (loop last-mtimes)))
+
