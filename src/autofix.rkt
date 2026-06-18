@@ -124,7 +124,7 @@
 
 (define (generate-patch v policy)
   (match v
-    [(violation kind source-var sink-func taint-path loc confidence)
+    [(violation kind source-var sink-func taint-path loc confidence severity)
      (let ([fix (policy-fix-for policy sink-func)])
        (if (not fix)
            ;; Sem mapeamento na política → sem patch automático

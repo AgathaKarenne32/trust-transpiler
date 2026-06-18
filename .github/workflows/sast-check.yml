@@ -25,9 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2 # Necessário para comparar o commit atual com o anterior
       - name: Run Trust-Transpiler
-        run: ./run.sh --diff --strict-mode
-        # O script falhará se o exit code for 1 devido ao Gatekeeper
+        # Fornecemos a range explícita para evitar o erro de sintaxe do git
+        run: ./run.sh --diff HEAD~1..HEAD --strict-mode
 
   # Job 2: Análise de Diff para PRs (apenas em Pull Requests)
   sast-scan-diff:

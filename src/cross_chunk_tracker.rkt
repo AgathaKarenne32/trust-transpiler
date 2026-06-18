@@ -60,7 +60,7 @@
 (provide
   ;; Estrutura de dados
   (struct-out taint-snapshot)
-  (get-cross-chunk-effect)
+  get-cross-chunk-effect
 
   ;; I/O do snapshot
   export-taint-snapshot
