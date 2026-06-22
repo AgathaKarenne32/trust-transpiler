@@ -1,5 +1,4 @@
 let raw_data = read-line;
-sanitize(raw_data);
 log(raw_data);
 let form_input = user-input();
 let query_param = form_input;
