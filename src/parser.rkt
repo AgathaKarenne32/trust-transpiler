@@ -3,16 +3,11 @@
 (require racket/match
          racket/string
          racket/list
-         "uir.rkt")
+         "uir.rkt"
+         "policy-loader.rkt")
 
 (provide parse-program
          parse-string)
-
-(define *sink-functions*
-  '(log query exec eval send write display println))
-
-(define *source-expressions*
-  '("source" "source()" "user-input()" "read-line" "getenv"))
 
 ;; -----------------------------------------------------------------------------
 ;; Tokenizer
@@ -100,9 +95,7 @@
                                 (equal? (car (ctx-peek ctx)) ";"))
                        (ctx-consume! ctx))]
               [loc   (make-loc ctx)]
-              [taint (if (member expr *source-expressions*)
-                         taint:tainted
-                         taint:clean)])
+              [taint (if (member expr (current-sources)) taint:tainted taint:clean)])
          (uir:assign var expr taint loc))]
 
       ;; 4. Chamada de função (func(arg))

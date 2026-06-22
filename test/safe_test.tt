@@ -1,1 +1,5 @@
-let x = source; sanitize(x); query(x);
+let config_val = hardcoded_string;
+query(config_val);
+let external_data = getenv;
+sanitize(external_data);
+exec(external_data);

@@ -1,0 +1,22 @@
+{
+  "sources": [
+    "source",
+    "source()",
+    "user-input()",
+    "read-line",
+    "getenv"
+  ],
+  "sinks": [
+    "log",
+    "query",
+    "exec",
+    "eval",
+    "send",
+    "write",
+    "display",
+    "println"
+  ],
+  "sanitizers": [
+    "sanitize"
+  ]
+}
