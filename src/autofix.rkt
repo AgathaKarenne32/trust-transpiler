@@ -353,29 +353,46 @@
   (displayln "[s] Aplicar [n] Pular [d] Diff [p] Política [i] Ignorar"))
 
 (define (apply-patch-to-file! path v)
+  ;; 1. Cria backup de segurança
   (unless (file-exists? (string-append path ".bak"))
     (copy-file path (string-append path ".bak")))
   
-  (let* ([lines (file->lines path)]
-         [line-num (max 1 (src-location-line (violation-location v)))]
-         [idx (- line-num 1)])
+  ;; 2. Extrai a variável E a função sink do objeto violation
+  (match v
+    [(violation _ source-var sink-func _ loc _ _)
+     
+     (let* ([lines (file->lines path)]
+            [var-name (symbol->string source-var)]
+            [sink-name (symbol->string sink-func)])
+       
+       ;; 3. SMART ANCHOR: Busca a linha exata que contém a função E a variável
+       ;; Em vez de confiar cegamente no loc, achamos a linha verdadeira.
+       (define target-idx
+         (for/first ([i (in-range (length lines))]
+                     #:when (and (string-contains? (list-ref lines i) var-name)
+                                 (string-contains? (list-ref lines i) sink-name)))
+           i))
+       
+       (if target-idx
+           (let* ([target-line (list-ref lines target-idx)]
+                  [indent (car (regexp-match #px"^\\s*" target-line))]
+                  
+                  ;; 4. Cria a instrução correta na sintaxe da linguagem .tt
+                  [sanitized-line (format "~asanitize(~a);" indent var-name)]
+                  
+                  ;; 5. Insere a nova linha ANTES do target-idx exato
+                  [new-lines (append (take lines target-idx)
+                                     (list sanitized-line)
+                                     (drop lines target-idx))])
+             
+             ;; 6. Salva no disco
+             (with-output-to-file path #:exists 'replace
+               (λ () (for-each displayln new-lines)))
+             (displayln (format "Sucesso: 'sanitize(~a);' inserido antes da linha ~a (ancoragem inteligente)." var-name (+ target-idx 1))))
+           
+           (displayln "Erro de Patch: Não foi possível localizar a linha exata com o sink no arquivo.")))]
     
-    ;; Proteção: verifica se o índice é válido para o arquivo lido
-    (if (and (>= idx 0) (< idx (length lines)))
-        (let* ([target-line (list-ref lines idx)]
-               [sanitized-line (string-append "(sanitize " target-line ")")]
-               [new-lines (append (take lines idx)
-                                  (list sanitized-line)
-                                  (drop lines (+ idx 1)))])
-          (with-output-to-file path #:exists 'replace
-            (λ () (for-each displayln new-lines)))
-          (displayln (format "Sucesso: linha ~a sanitizada." line-num)))
-        
-        ;; Fallback: se a linha for inválida, anexa ao final (segurança primeiro)
-        (begin
-          (displayln (format "Aviso: Linha ~a não encontrada. Aplicando sanitização ao final do arquivo." line-num))
-          (with-output-to-file path #:exists 'append
-            (λ () (displayln "(sanitize (last-line-of-file))")))))))
+    [_ (displayln "Erro: O objeto passado não é uma violação válida.")]))
 
 (define (show-diff path)
   (if (file-exists? (string-append path ".bak"))
