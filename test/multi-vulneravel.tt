@@ -1,2 +1,6 @@
-let v1 = source;
-query(v1);
+
+let raw_data = read-line;
+log(raw_data);
+let form_input = user-input();
+let query_param = form_input;
+query(query_param);
