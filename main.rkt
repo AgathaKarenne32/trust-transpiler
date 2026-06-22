@@ -20,6 +20,7 @@
          "src/cross_chunk_tracker.rkt"
          (prefix-in gate: "src/api_gatekeeper.rkt")
          "src/ai_security_linter.rkt"
+         "src/policy-loader.rkt"
          )
 
 ;; 1. Definição Global da Política (Movido para fora do module+)
@@ -95,6 +96,7 @@
 (module+ main
   (load-stubs-from-dir! "./stubs")
   (active-policy default-policy)
+  (load-policy! "policy.json")
 
   (define demo-mode (make-parameter #f))
   (define color-mode (make-parameter #t))
