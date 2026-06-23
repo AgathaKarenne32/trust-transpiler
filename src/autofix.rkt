@@ -53,7 +53,8 @@
          "uir.rkt"
          "types.rkt"
          "policy.rkt"
-         "reporter.rkt")
+         "reporter.rkt"
+         "ai_security_linter.rkt")
 
 (provide
   ;; Structs exportados
@@ -377,10 +378,16 @@
            (let* ([target-line (list-ref lines target-idx)]
                   [indent (car (regexp-match #px"^\\s*" target-line))]
                   
-                  ;; 4. Cria a instrução correta na sintaxe da linguagem .tt
-                  [sanitized-line (format "~asanitize(~a);" indent var-name)]
+                  ;; 1. Chama o Cérebro passando os SÍMBOLOS (não strings)
+                  [smart-fn (get-smart-sanitizer sink-func source-var)]
                   
-                  ;; 5. Insere a nova linha ANTES do target-idx exato
+                  ;; 2. Converte a variável para string apenas para formatar o texto final
+                  [var-name (symbol->string source-var)]
+                  
+                  ;; 3. Cria a instrução correta baseada na resposta (IA ou Fallback)
+                  [sanitized-line (format "~a~a(~a);" indent smart-fn var-name)]
+                  
+                  ;; 4. Insere a nova linha ANTES do target-idx exato
                   [new-lines (append (take lines target-idx)
                                      (list sanitized-line)
                                      (drop lines target-idx))])
@@ -388,8 +395,7 @@
              ;; 6. Salva no disco
              (with-output-to-file path #:exists 'replace
                (λ () (for-each displayln new-lines)))
-             (displayln (format "Sucesso: 'sanitize(~a);' inserido antes da linha ~a (ancoragem inteligente)." var-name (+ target-idx 1))))
-           
+             (displayln (format "Sucesso: '~a(~a);' inserido antes da linha ~a." smart-fn var-name (+ target-idx 1))))
            (displayln "Erro de Patch: Não foi possível localizar a linha exata com o sink no arquivo.")))]
     
     [_ (displayln "Erro: O objeto passado não é uma violação válida.")]))
