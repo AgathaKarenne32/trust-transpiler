@@ -50,17 +50,13 @@
                              (let ([snap (import-taint-snapshot target-file)])
                                (and snap (snapshot->taint-env snap))))]
            [uir-tree (parse-program content target-file)]
-           ;; Definimos 'result' aqui dentro do let*
            [result (if lint-only? 
                        (analysis-result '() (make-taint-env))
                        (analyze-program uir-tree (or initial-env (make-taint-env))))]
-           [lint-findings (run-linter uir-tree)]
-           [lint-violations (map lint-finding->violation lint-findings)]
-           ;; Combinamos as violações
-           [violations (append (analysis-result-violations result) lint-violations)]
+           ;; Apenas as violações reais do nosso motor
+           [violations (analysis-result-violations result)]
            [patches (generate-patches-for-all violations (active-policy))])
 
-      ;; Agora 'violations' e 'result' estão definidos e visíveis aqui
       (when use-cache? (export-taint-snapshot (analysis-result-final-env result) target-file))
       
       (report-analysis (analysis-result violations (analysis-result-final-env result)) target-file #:color? color?)
@@ -76,12 +72,13 @@
            [result (if lint-only? 
                        (analysis-result '() (make-taint-env))
                        (analyze-program uir-tree (make-taint-env)))]
-
+           
+           ;; Logs de debug devidamente formatados para o let*
            [_ (displayln (format "Debug: Violações encontradas pelo motor: ~a" (analysis-result-violations result)))]
-           (displayln (format "Debug: AST gerada: ~a" uir-tree))
-           [lint-findings (run-linter uir-tree)]
-           [lint-violations (map lint-finding->violation lint-findings)]
-           [violations (append (analysis-result-violations result) (map lint-finding->violation (run-linter uir-tree)))])
+           #;[_ (displayln (format "Debug: AST gerada: ~a" uir-tree))] ;; Comentado para não poluir muito o terminal
+           
+           ;; Extrai apenas as violações reais do nosso motor de Taint
+           [violations (analysis-result-violations result)])
       violations)))
 
 (define (run-interactive-fix target-file)
