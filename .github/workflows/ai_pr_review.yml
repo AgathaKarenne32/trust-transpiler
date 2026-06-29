@@ -1,0 +1,30 @@
+name: AI PR Review Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  trust-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Racket
+        run: sudo apt-get update && sudo apt-get install -y racket
+
+      - name: Instalar dependências Python
+        run: pip install -r oracle/requirements.txt
+
+      - name: Rodar testes do agente
+        run: cd oracle && python -m pytest test_pr_review_agent.py -q
+
+      - name: Rodar agente de revisão
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python oracle/pr_review_agent.py

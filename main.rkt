@@ -21,6 +21,8 @@
          (prefix-in gate: "src/api_gatekeeper.rkt")
          "src/ai_security_linter.rkt"
          "src/policy-loader.rkt"
+         "src/trust_score.rkt"
+         json
          )
 
 ;; 1. Definição Global da Política (Movido para fora do module+)
@@ -102,6 +104,36 @@
   (define strict-mode (make-parameter #f))
   (define lint-only-mode (make-parameter #f))
   (define diff-range (make-parameter #f))
+  (define trust-score-mode (make-parameter #f))
+  (define json-report-mode (make-parameter #f))
+
+  (define (print-trust-score! violations)
+    (define report (compute-trust-score violations))
+    (displayln (jsexpr->string (trust-report->jsexpr report))))
+
+  (define (violation->jsexpr v)
+    (hash 'kind (symbol->string (violation-kind v))
+          'source (format "~a" (violation-source-var v))
+          'sink (format "~a" (violation-sink-func v))
+          'taint_path (map (λ (s) (format "~a" s)) (violation-taint-path v))
+          'confidence (violation-confidence v)
+          'severity (symbol->string (violation-severity v))))
+
+  (define (patch->jsexpr p)
+    (hash 'kind (symbol->string (patch-suggestion-kind p))
+          'sanitizer_fn (format "~a" (patch-suggestion-sanitizer-fn p))
+          'code_suggestion (patch-suggestion-code-suggestion p)
+          'confidence (patch-suggestion-confidence p)))
+
+  (define (print-json-report! target-file violations)
+    (define trust (compute-trust-score violations))
+    (define patches (generate-patches-for-all violations (active-policy)))
+    (displayln
+      (jsexpr->string
+        (hash 'file target-file
+              'trust_score (trust-report->jsexpr trust)
+              'violations (map violation->jsexpr violations)
+              'patches (map patch->jsexpr patches)))))
 
   (define (run-scan-and-evaluate! target-file content)
     (let* ([violations (run-scan-and-return target-file content #f #t #f)]
@@ -139,6 +171,8 @@
     ["--strict-mode" "Ativa Gatekeeper" (begin (gate:enable-strict-mode!) (strict-mode #t))]
     ["--lint-only" "Executa apenas Linter" (lint-only-mode #t)]
     ["--no-color" "Sem cor" (color-mode #f)]
+    ["--trust-score" "Imprime AI Code Trust Score (JSON) em vez do relatório padrão" (trust-score-mode #t)]
+    ["--json-report" "Imprime relatório JSON completo (violações + trust score + patches)" (json-report-mode #t)]
     #:args positional-args
 
     (cond
@@ -152,10 +186,12 @@
                     (run-scan-and-return f (file->string f) (color-mode) #t #f))))
          (define filtered (check-violations all-violations))
          (define verdict (gate:evaluate-violations filtered))
-         (displayln (format "\n─────────────────────────────────────\nResultado: ~a violação(ões) encontrada(s)" (length filtered)))
+         (if (trust-score-mode)
+             (print-trust-score! all-violations)
+             (displayln (format "\n─────────────────────────────────────\nResultado: ~a violação(ões) encontrada(s)" (length filtered))))
          (if (or (> (length filtered) 0) (equal? verdict 'BLOCK))
-             (begin (displayln (format "Status: FALHOU — Gatekeeper Veto")) (exit 1))
-             (begin (displayln "Status: PASSOU") (exit 0))))]
+             (begin (unless (trust-score-mode) (displayln (format "Status: FALHOU — Gatekeeper Veto"))) (exit 1))
+             (begin (unless (trust-score-mode) (displayln "Status: PASSOU")) (exit 0))))]
       
       [(watch-path) (watch-mode (watch-path))]
       [(demo-mode) (run-scan! "<demo>" *demo-program* (color-mode) (cache-mode) (lint-only-mode))]
@@ -168,6 +204,8 @@
               [content (file->string target)]
               [v-list (run-scan-and-return target content (color-mode) (cache-mode) (lint-only-mode))]
               [verdict (gate:evaluate-violations (check-violations v-list))])
+         (when (trust-score-mode) (print-trust-score! v-list))
+         (when (json-report-mode) (print-json-report! target v-list))
          (if (equal? verdict 'BLOCK) (exit 1) (exit 0)))]
       
       [else (displayln "Uso: trust-transpiler [fix <arquivo> | <arquivo>]") (exit 0)])))
@@ -189,4 +227,3 @@
         (hash-set! last-mtimes f current-mtime)))
     (sleep 0.5)
     (loop last-mtimes)))
-

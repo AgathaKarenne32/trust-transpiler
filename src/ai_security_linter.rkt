@@ -62,65 +62,30 @@
 (define (call-llm-api sink-func var-name api-key)
   (define sink-str (symbol->string sink-func))
   (define var-str (symbol->string var-name))
+  
+  ;; Aponta para o seu Oráculo local
+  (define endpoint (string->url "http://localhost:8008/api/v1/get-sanitizer"))
 
-  ;; Usando o modelo mais atualizado (IA)
-  (define endpoint
-    (string->url
-     (format "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=~a"
-             api-key)))
-
-  ;; Prompt de Engenharia de Segurança
-  (define prompt
-    (format (string-append
-             "Atue como um especialista em AppSec. Uma variável chamada '~a' "
-             "está a fluir sem validação para a função sensível '~a'. "
-             "Responda APENAS com o nome da função de sanitização ideal para "
-             "este caso (ex: escape_sql, escape_html). Não escreva mais nada, "
-             "apenas o nome da função.")
-            var-str sink-str))
-
-  ;; Corpo da requisição em JSON
+  ;; O Pydantic espera: {"sink": "...", "variable": "..."}
   (define payload
-    (hasheq 'contents (list (hasheq 'parts (list (hasheq 'text prompt))))))
+    (hasheq 'sink sink-str
+            'variable var-str))
 
   (with-handlers
-    ([exn:fail?
-      (lambda (e)
-        (displayln (format "Aviso: Erro interno no Racket. A usar fallback. Detalhe: ~a" (exn-message e)))
-        (fallback-sanitizer sink-func))])
+    ([exn:fail? (lambda (e) 
+                  (displayln (format "Erro de conexão com Oráculo: ~a" (exn-message e)))
+                  (fallback-sanitizer sink-func))])
 
-    ;; Prepara e envia o POST request
     (define response-port
       (post-pure-port endpoint
-                       (jsexpr->bytes payload)
-                       (list "Content-Type: application/json")))
-
-    ;; Lê a resposta JSON
+                      (jsexpr->bytes payload)
+                      (list "Content-Type: application/json")))
+    
     (define response-json (bytes->jsexpr (port->bytes response-port)))
     (close-input-port response-port)
 
-    ;; ── TRATAMENTO DE ERROS DO GOOGLE E EXTRAÇÃO SEGURA ──────────
-    (if (hash-has-key? response-json 'error)
-        (let* ([err-obj (hash-ref response-json 'error)]
-               [err-msg (hash-ref err-obj 'message "Erro desconhecido da Google")])
-          (displayln (format "Aviso: A Google rejeitou a requisição. Erro: ~a" err-msg))
-          (fallback-sanitizer sink-func))
-        
-        ;; AQUI ESTÁ A CORREÇÃO: Usando let* para definir as variáveis locais
-        (let* ([candidates (hash-ref response-json 'candidates)]
-               [candidate-0 (first candidates)]
-               [content (hash-ref candidate-0 'content)]
-               [parts (hash-ref content 'parts)]
-               [part-0 (first parts)]
-               [ai-suggestion (hash-ref part-0 'text)]
-               [cleaned (string-trim ai-suggestion)])
-
-          ;; Guard Anti-Alucinação
-          (if (valid-sanitizer-name? cleaned)
-              cleaned
-              (begin
-                (displayln (format "Aviso: Sugestão da IA malformada ('~a'). A usar fallback." cleaned))
-                (fallback-sanitizer sink-func)))))))
+    ;; Extração conforme o schema SanitizerResponse
+    (hash-ref response-json 'sanitizer (fallback-sanitizer sink-func))))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; valid-sanitizer-name? : String → Boolean

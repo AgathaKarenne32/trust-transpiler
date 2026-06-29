@@ -8,3 +8,6 @@ compiled/
 
 compiled/
 *.zo
+
+__pycache__/
+*.pyc
